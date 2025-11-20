@@ -1,25 +1,28 @@
-// File: app/_layout.js
+// File: app/_layout.js (Cập nhật)
 import React from 'react';
 import { Stack } from 'expo-router';
+import { HabitProvider } from '../src/context/HabitContext'; 
+// Cần cài đặt: npm install react-native-safe-area-context
+import { SafeAreaProvider } from 'react-native-safe-area-context'; 
+import { StatusBar } from 'expo-status-bar';
 
 export default function RootLayout() {
   return (
-    <Stack>
-      {/* Đường dẫn mặc định '/' sẽ được tìm thấy trong app/(tabs)/index.js 
-        Chúng ta sẽ ẩn tiêu đề của trang chính (Home/List)
-      */}
-      <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
-      
-      {/* Màn hình cho việc Tạo hoặc Chỉnh sửa thói quen. 
-        Chúng ta sẽ thiết lập tiêu đề tùy chỉnh cho màn hình này sau.
-      */}
-      <Stack.Screen 
-        name="create-edit-habit" 
-        options={{ 
-            title: 'Tạo Thói Quen Mới', 
-            presentation: 'modal' // Dùng modal cho trải nghiệm tốt hơn
-        }} 
-      />
-    </Stack>
+    // Bọc toàn bộ bằng SafeAreaProvider và HabitProvider
+    <SafeAreaProvider>
+      <HabitProvider>
+        <Stack>
+          <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
+          <Stack.Screen 
+              name="create-edit-habit" 
+              options={{ 
+                  title: 'Tạo Thói Quen Mới', 
+                  presentation: 'modal' 
+              }} 
+          />
+        </Stack>
+        <StatusBar style="auto" />
+      </HabitProvider>
+    </SafeAreaProvider>
   );
 }

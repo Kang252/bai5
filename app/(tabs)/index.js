@@ -1,28 +1,93 @@
 // File: app/(tabs)/index.js
 import React from 'react';
 import { View, Text, FlatList, StyleSheet, TouchableOpacity } from 'react-native';
-import { useHabits } from '../../src/context/HabitContext'; // Điều chỉnh đường dẫn
+import { useHabits } from '../../src/context/HabitContext'; 
 import HabitListItem from '../../src/components/HabitListItem';
 import Ionicons from 'react-native-vector-icons/Ionicons';
-import { router } from 'expo-router'; // Import router từ expo-router
+import { router } from 'expo-router'; 
+import { SafeAreaView } from 'react-native-safe-area-context';
 
-// Tái sử dụng Styles từ Bước 4
+export default function HabitListScreen() {
+  const { habits } = useHabits();
+
+  const navigateToCreateHabit = () => {
+    router.push('create-edit-habit'); 
+  };
+  
+  const navigateToEditHabit = (habitId) => {
+    router.push({ 
+        pathname: 'create-edit-habit', 
+        params: { habitId } 
+    });
+  };
+
+  return (
+    <SafeAreaView style={styles.safeContainer} edges={['top', 'bottom']}>
+        <View style={styles.container}>
+            <Text style={styles.header}>Thói Quen Của Tôi</Text>
+            
+            <FlatList
+                data={habits}
+                keyExtractor={(item) => item.id}
+                renderItem={({ item }) => (
+                <HabitListItem 
+                    habit={item} 
+                    onPress={navigateToEditHabit} // onLongPress của ListItem gọi hàm này
+                />
+                )}
+                contentContainerStyle={styles.listContent}
+                ListEmptyComponent={() => (
+                    <View style={styles.emptyContainer}>
+                        <Ionicons name="bulb-outline" size={50} color="#ccc" />
+                        <Text style={styles.emptyText}>Bạn chưa có thói quen nào. Hãy thêm cái mới!</Text>
+                    </View>
+                )}
+            />
+
+            <TouchableOpacity 
+                style={styles.addButton}
+                onPress={navigateToCreateHabit}
+            >
+                <Ionicons name="add" size={30} color="#fff" />
+            </TouchableOpacity>
+        </View>
+    </SafeAreaView>
+  );
+};
+
 const styles = StyleSheet.create({
-    container: {
+    safeContainer: {
         flex: 1,
         backgroundColor: '#f5f5f5',
     },
+    container: {
+        flex: 1,
+    },
     header: {
-        fontSize: 24,
+        fontSize: 28,
         fontWeight: 'bold',
-        padding: 20,
+        paddingHorizontal: 15,
+        paddingBottom: 15,
         backgroundColor: '#fff',
-        paddingTop: 60, // Thêm padding cho thanh trạng thái
+        borderBottomWidth: 1,
+        borderColor: '#eee',
     },
     listContent: {
         paddingBottom: 100,
+        paddingTop: 10,
     },
-    // ... (Thêm styles cho card, icon, title, streakText, statusCircle nếu chưa có)
+    emptyContainer: {
+        alignItems: 'center',
+        justifyContent: 'center',
+        padding: 50,
+        marginTop: 50,
+    },
+    emptyText: {
+        fontSize: 16,
+        color: '#666',
+        marginTop: 10,
+        textAlign: 'center',
+    },
     addButton: {
         position: 'absolute',
         right: 20,
@@ -40,41 +105,3 @@ const styles = StyleSheet.create({
         shadowRadius: 3.84,
     },
 });
-
-
-export default function HabitListScreen() {
-  const { habits } = useHabits();
-
-  // FR-3: Hiển thị danh sách cuộn
-  return (
-    <View style={styles.container}>
-      <Text style={styles.header}>Thói Quen Của Tôi</Text>
-      
-      <FlatList
-        data={habits}
-        keyExtractor={(item) => item.id}
-        renderItem={({ item }) => (
-          <HabitListItem 
-            habit={item} 
-            // Khi nhấn vào item sẽ điều hướng đến màn hình sửa thói quen
-            onPress={() => router.push({ 
-                pathname: 'create-edit-habit', 
-                params: { habitId: item.id } 
-            })}
-          />
-        )}
-        contentContainerStyle={styles.listContent}
-      />
-
-      {/* Nút Thêm Thói Quen */}
-      <TouchableOpacity 
-        style={styles.addButton}
-        onPress={() => router.push('create-edit-habit')} // Điều hướng đến màn hình tạo mới
-      >
-        <Ionicons name="add" size={30} color="#fff" />
-      </TouchableOpacity>
-    </View>
-  );
-};
-
-// Cần cập nhật lại HabitListItem.js để nhận props onPress
