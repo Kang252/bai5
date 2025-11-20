@@ -3,7 +3,6 @@ import React from 'react';
 import { View, Text, FlatList, StyleSheet, TouchableOpacity } from 'react-native';
 import { useHabits } from '../../src/context/HabitContext'; 
 import HabitListItem from '../../src/components/HabitListItem';
-import Ionicons from 'react-native-vector-icons/Ionicons';
 import { router } from 'expo-router'; 
 import { SafeAreaView } from 'react-native-safe-area-context';
 
@@ -38,7 +37,8 @@ export default function HabitListScreen() {
                 contentContainerStyle={styles.listContent}
                 ListEmptyComponent={() => (
                     <View style={styles.emptyContainer}>
-                        <Ionicons name="bulb-outline" size={50} color="#ccc" />
+                        {/* Thay thế Icon bằng Emoji */}
+                        <Text style={{fontSize: 50}}>💡</Text>
                         <Text style={styles.emptyText}>Bạn chưa có thói quen nào. Hãy thêm cái mới!</Text>
                     </View>
                 )}
@@ -48,7 +48,8 @@ export default function HabitListScreen() {
                 style={styles.addButton}
                 onPress={navigateToCreateHabit}
             >
-                <Ionicons name="add" size={30} color="#fff" />
+                {/* Thay thế Icon Add bằng dấu cộng Text */}
+                <Text style={styles.addButtonText}>+</Text>
             </TouchableOpacity>
         </View>
     </SafeAreaView>
@@ -104,4 +105,10 @@ const styles = StyleSheet.create({
         shadowOpacity: 0.25,
         shadowRadius: 3.84,
     },
+    addButtonText: {
+        fontSize: 40,
+        color: '#fff',
+        marginTop: -4, // Căn chỉnh nhỏ để dấu cộng nằm giữa
+        fontWeight: '300'
+    }
 });

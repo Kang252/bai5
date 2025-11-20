@@ -1,15 +1,16 @@
 // File: app/create-edit-habit.js
 import React, { useState, useLayoutEffect } from 'react';
-import { View, Text, TextInput, Button, StyleSheet, ScrollView, TouchableOpacity } from 'react-native';
+import { View, Text, TextInput, Button, StyleSheet, ScrollView, TouchableOpacity, Switch, Platform } from 'react-native';
 import { useLocalSearchParams, router } from 'expo-router';
-import { useHabits } from '../src/context/HabitContext'; // Điều chỉnh đường dẫn
-import Ionicons from 'react-native-vector-icons/Ionicons';
+import { useHabits } from '../src/context/HabitContext';
+// Đã xóa import Ionicons
+import DateTimePicker from '@react-native-community/datetimepicker';
+import { scheduleDailyReminder, scheduleSmartReminder, cancelHabitNotifications } from '../src/services/NotificationService';
 
-// Mảng Icon và Màu sắc giả để người dùng lựa chọn (FR-1: Icon & Color theme)
-const ICON_OPTIONS = ['book', 'droplet', 'leaf', 'walk', 'moon'];
-const COLOR_OPTIONS = ['#4A90E2', '#50E3C2', '#F5A623', '#D0021B', '#8B572A'];
-
-const FREQUENCY_OPTIONS = ['daily', 'weekly', 'custom']; // FR-1: Target frequency
+// SỬA: Danh sách Emoji thay vì tên Icon
+const ICON_OPTIONS = ['📖', '💧', '🌿', '🚶', '🌙', '💪', '💻', '🎵'];
+const COLOR_OPTIONS = ['#4A90E2', '#50E3C2', '#F5A623', '#D0021B', '#8B572A', '#9B59B6'];
+const FREQUENCY_OPTIONS = ['daily', 'weekly', 'custom'];
 
 export default function CreateEditHabitScreen() {
   const { habitId } = useLocalSearchParams();
@@ -18,6 +19,7 @@ export default function CreateEditHabitScreen() {
   const isEditing = !!habitId;
   const currentHabit = isEditing ? habits.find(h => h.id === habitId) : null;
   
+  // State
   const [title, setTitle] = useState(currentHabit?.title || '');
   const [icon, setIcon] = useState(currentHabit?.icon || ICON_OPTIONS[0]);
   const [description, setDescription] = useState(currentHabit?.description || '');
@@ -25,197 +27,152 @@ export default function CreateEditHabitScreen() {
   const [startDate, setStartDate] = useState(currentHabit?.startDate || new Date().toISOString().split('T')[0]);
   const [colorTheme, setColorTheme] = useState(currentHabit?.colorTheme || COLOR_OPTIONS[0]);
 
-  // Cập nhật tiêu đề màn hình động
+  const [enableReminder, setEnableReminder] = useState(!!currentHabit?.reminderTime);
+  const [reminderTime, setReminderTime] = useState(currentHabit?.reminderTime ? new Date(currentHabit.reminderTime) : new Date());
+  const [reminderMessage, setReminderMessage] = useState(currentHabit?.reminderMessage || '');
+  const [showTimePicker, setShowTimePicker] = useState(false);
+
   useLayoutEffect(() => {
     router.setParams({ 
-        title: isEditing ? `Sửa: ${currentHabit?.title}` : 'Tạo Thói Quen Mới',
-        // Thiết lập button Xóa ở góc phải (chỉ trong chế độ chỉnh sửa)
+        title: isEditing ? 'Sửa Thói Quen' : 'Tạo Thói Quen',
         headerRight: () => isEditing && (
             <TouchableOpacity onPress={handleDelete} style={{ marginRight: 10 }}>
-                <Ionicons name="trash-outline" size={24} color="#D0021B" />
+                {/* Thay icon thùng rác bằng Text */}
+                <Text style={{color: '#D0021B', fontWeight: 'bold', fontSize: 16}}>Xóa</Text>
             </TouchableOpacity>
         ),
     });
-  }, [isEditing, currentHabit?.title]);
+  }, [isEditing, habitId]);
 
-  // --- Xử lý Logic ---
-
-  const handleSave = () => {
-    if (!title || !icon || !frequency) {
-      alert('Vui lòng điền đủ Tiêu đề, Icon và Tần suất.');
+  const handleSave = async () => {
+    if (!title) {
+      alert('Vui lòng nhập tên thói quen.');
       return;
     }
 
-    const habitData = { title, icon, description, targetFrequency: frequency, startDate, colorTheme };
+    const habitData = { 
+        title, icon, description, 
+        targetFrequency: frequency, 
+        startDate, colorTheme,
+        reminderTime: enableReminder ? reminderTime.toISOString() : null,
+        reminderMessage: enableReminder ? reminderMessage : null
+    };
+
+    let targetId = habitId;
 
     if (isEditing) {
-      // FR-2: Cập nhật thói quen
       updateHabit(habitId, habitData);
-      console.log('Thói quen đã được cập nhật:', habitId);
     } else {
-      // FR-1: Tạo thói quen mới
-      addHabit(habitData);
-      console.log('Thói quen mới đã được thêm');
+      targetId = addHabit(habitData); 
+    }
+
+    if (enableReminder) {
+        await scheduleDailyReminder(
+            targetId, 
+            title, 
+            reminderTime.getHours(), 
+            reminderTime.getMinutes(), 
+            reminderMessage
+        );
+        await scheduleSmartReminder(targetId, title);
+    } else {
+        await cancelHabitNotifications(targetId);
     }
     
     router.back();
   };
 
-  const handleDelete = () => {
-    // FR-2: Xóa thói quen
+  const handleDelete = async () => {
     if (isEditing) {
-        if (confirm('Bạn có chắc chắn muốn xóa thói quen này? Hành động này không thể hoàn tác.')) {
-            deleteHabit(habitId);
-            console.log('Thói quen đã bị xóa:', habitId);
-            router.back();
-        }
+        await cancelHabitNotifications(habitId);
+        deleteHabit(habitId);
+        router.back();
+    }
+  };
+
+  const onTimeChange = (event, selectedDate) => {
+    setShowTimePicker(false);
+    if (selectedDate) {
+        setReminderTime(selectedDate);
     }
   };
 
   return (
     <ScrollView style={styles.container}>
-      {/* Trường Tiêu đề (Bắt buộc) */}
-      <Text style={styles.label}>Tên Thói Quen (Bắt buộc)</Text>
-      <TextInput
-        style={styles.input}
-        value={title}
-        onChangeText={setTitle}
-        placeholder="Ví dụ: Đọc sách 30 phút"
-      />
+      <Text style={styles.label}>Tên Thói Quen *</Text>
+      <TextInput style={styles.input} value={title} onChangeText={setTitle} placeholder="Ví dụ: Chạy bộ" />
 
-      {/* Trường Mô tả (Tùy chọn) */}
-      <Text style={styles.label}>Mô Tả (Tùy chọn)</Text>
-      <TextInput
-        style={styles.input}
-        value={description}
-        onChangeText={setDescription}
-        placeholder="Mô tả chi tiết về thói quen..."
-        multiline
-      />
+      <Text style={styles.label}>Mô Tả</Text>
+      <TextInput style={styles.input} value={description} onChangeText={setDescription} placeholder="Chi tiết..." />
 
-      {/* Trường Icon (Bắt buộc) */}
-      <Text style={styles.label}>Icon (Bắt buộc)</Text>
-      <View style={styles.pickerContainer}>
-        {ICON_OPTIONS.map(iconName => (
-          <TouchableOpacity
-            key={iconName}
-            onPress={() => setIcon(iconName)}
-            style={[styles.iconOption, icon === iconName && { borderColor: colorTheme, borderWidth: 3 }]}
-          >
-            <Ionicons name={iconName} size={30} color="#333" />
+      <Text style={styles.label}>Biểu Tượng</Text>
+      <View style={styles.rowWrap}>
+        {ICON_OPTIONS.map(i => (
+          <TouchableOpacity key={i} onPress={() => setIcon(i)} style={[styles.iconOption, icon === i && { borderColor: colorTheme, borderWidth: 2 }]}>
+            {/* Hiển thị Emoji thay vì Ionicons */}
+            <Text style={{fontSize: 28}}>{i}</Text>
           </TouchableOpacity>
         ))}
       </View>
 
-      {/* Trường Màu sắc (Tùy chọn) */}
-      <Text style={styles.label}>Màu Chủ Đạo (Tùy chọn)</Text>
-      <View style={styles.pickerContainer}>
-        {COLOR_OPTIONS.map(colorCode => (
-          <TouchableOpacity
-            key={colorCode}
-            onPress={() => setColorTheme(colorCode)}
-            style={[
-              styles.colorOption,
-              { backgroundColor: colorCode },
-              colorTheme === colorCode && { borderWidth: 3, borderColor: '#333' }
-            ]}
-          />
-        ))}
-      </View>
-      
-      {/* Trường Tần suất (Bắt buộc) */}
-      <Text style={styles.label}>Tần Suất (Bắt buộc)</Text>
-      <View style={styles.pickerContainer}>
-        {FREQUENCY_OPTIONS.map(freq => (
-          <TouchableOpacity
-            key={freq}
-            onPress={() => setFrequency(freq)}
-            style={[styles.frequencyOption, frequency === freq && styles.frequencySelected]}
-          >
-            <Text style={[styles.frequencyText, frequency === freq && styles.frequencyTextSelected]}>
-              {freq.charAt(0).toUpperCase() + freq.slice(1)}
-            </Text>
-          </TouchableOpacity>
+      <Text style={styles.label}>Màu Sắc</Text>
+      <View style={styles.rowWrap}>
+        {COLOR_OPTIONS.map(c => (
+          <TouchableOpacity key={c} onPress={() => setColorTheme(c)} style={[styles.colorOption, { backgroundColor: c }, colorTheme === c && { borderWidth: 3, borderColor: '#333' }]} />
         ))}
       </View>
 
-      {/* Trường Ngày bắt đầu (Mặc định là hôm nay) */}
-      <Text style={styles.label}>Ngày Bắt Đầu</Text>
-      {/* Trong ứng dụng thực tế, bạn nên dùng thư viện DatePicker. 
-          Ở đây, chúng ta dùng TextInput để đơn giản. */}
-      <TextInput
-        style={styles.input}
-        value={startDate}
-        onChangeText={setStartDate}
-        placeholder="YYYY-MM-DD (Mặc định: Hôm nay)"
-      />
+      <View style={styles.divider} />
 
-      <Button title={isEditing ? 'Lưu Thay Đổi' : 'Tạo Thói Quen'} onPress={handleSave} color="#4A90E2" />
+      <View style={styles.rowBetween}>
+          <Text style={styles.label}>Bật Nhắc Nhở Hàng Ngày</Text>
+          <Switch value={enableReminder} onValueChange={setEnableReminder} trackColor={{true: colorTheme}} />
+      </View>
 
-      {/* Khoảng cách cuối trang */}
-      <View style={{ height: 40 }} />
+      {enableReminder && (
+          <View style={styles.reminderContainer}>
+              <Text style={styles.subLabel}>Thời gian nhắc:</Text>
+              <TouchableOpacity onPress={() => setShowTimePicker(true)} style={styles.timeButton}>
+                  <Text style={styles.timeText}>
+                    {reminderTime.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                  </Text>
+              </TouchableOpacity>
+              
+              {showTimePicker && (
+                  <DateTimePicker value={reminderTime} mode="time" display="default" onChange={onTimeChange} />
+              )}
+
+              <Text style={styles.subLabel}>Tin nhắn nhắc nhở:</Text>
+              <TextInput 
+                style={styles.input} 
+                value={reminderMessage} 
+                onChangeText={setReminderMessage} 
+                placeholder="Nhập lời nhắn động viên..."
+              />
+              <Text style={styles.note}>* Hệ thống cũng sẽ tự động nhắc bạn lúc 20:00 (Smart Reminder).</Text>
+          </View>
+      )}
+
+      <View style={{ marginTop: 30 }}>
+        <Button title="Lưu Thói Quen" onPress={handleSave} color={colorTheme} />
+      </View>
+      <View style={{ height: 50 }} />
     </ScrollView>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    padding: 20,
-    backgroundColor: '#fff',
-  },
-  label: {
-    fontSize: 16,
-    fontWeight: 'bold',
-    marginTop: 15,
-    marginBottom: 5,
-    color: '#333',
-  },
-  input: {
-    borderWidth: 1,
-    borderColor: '#ddd',
-    padding: 10,
-    borderRadius: 8,
-    fontSize: 16,
-    backgroundColor: '#f9f9f9',
-    minHeight: 40,
-  },
-  pickerContainer: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    marginBottom: 15,
-  },
-  iconOption: {
-    padding: 10,
-    borderRadius: 10,
-    marginRight: 10,
-    marginBottom: 10,
-    backgroundColor: '#eee',
-  },
-  colorOption: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    marginRight: 10,
-    marginBottom: 10,
-    borderWidth: 2,
-    borderColor: 'transparent',
-  },
-  frequencyOption: {
-    paddingVertical: 10,
-    paddingHorizontal: 15,
-    borderRadius: 8,
-    marginRight: 10,
-    backgroundColor: '#eee',
-  },
-  frequencySelected: {
-    backgroundColor: '#4A90E2',
-  },
-  frequencyText: {
-    color: '#333',
-    fontWeight: '500',
-  },
-  frequencyTextSelected: {
-    color: '#fff',
-  },
+  container: { flex: 1, padding: 20, backgroundColor: '#fff' },
+  label: { fontSize: 16, fontWeight: 'bold', marginTop: 15, marginBottom: 8, color: '#333' },
+  input: { borderWidth: 1, borderColor: '#ddd', borderRadius: 8, padding: 12, fontSize: 16, backgroundColor: '#f9f9f9' },
+  rowWrap: { flexDirection: 'row', flexWrap: 'wrap' },
+  iconOption: { padding: 10, borderRadius: 10, backgroundColor: '#eee', marginRight: 12, marginBottom: 10 },
+  colorOption: { width: 40, height: 40, borderRadius: 20, marginRight: 12, marginBottom: 10 },
+  divider: { height: 1, backgroundColor: '#eee', marginVertical: 20 },
+  rowBetween: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+  reminderContainer: { backgroundColor: '#F0F4F8', padding: 15, borderRadius: 10, marginTop: 10 },
+  subLabel: { fontSize: 14, fontWeight: '600', marginTop: 10, marginBottom: 5, color: '#555' },
+  timeButton: { backgroundColor: '#fff', padding: 12, borderRadius: 8, alignItems: 'center', borderWidth: 1, borderColor: '#ddd' },
+  timeText: { fontSize: 18, fontWeight: 'bold', color: '#333' },
+  note: { fontSize: 12, color: '#888', marginTop: 8, fontStyle: 'italic' }
 });

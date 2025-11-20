@@ -1,14 +1,13 @@
-// File: app/_layout.js (Cập nhật)
+// File: app/_layout.js
 import React from 'react';
 import { Stack } from 'expo-router';
 import { HabitProvider } from '../src/context/HabitContext'; 
-// Cần cài đặt: npm install react-native-safe-area-context
 import { SafeAreaProvider } from 'react-native-safe-area-context'; 
 import { StatusBar } from 'expo-status-bar';
 
 export default function RootLayout() {
   return (
-    // Bọc toàn bộ bằng SafeAreaProvider và HabitProvider
+    // Bọc toàn bộ bằng SafeAreaProvider và HabitProvider tại đây
     <SafeAreaProvider>
       <HabitProvider>
         <Stack>

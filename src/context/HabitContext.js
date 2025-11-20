@@ -1,10 +1,11 @@
 // File: src/context/HabitContext.js
-import React, { createContext, useState, useContext } from 'react';
+import React, { createContext, useState, useContext, useEffect } from 'react';
 import 'react-native-get-random-values';
 import { v4 as uuidv4 } from 'uuid'; 
 import { getTodayDateKey } from '../utils/dateUtils';
+import { registerForPushNotificationsAsync } from '../services/NotificationService';
 
-// --- Hàm Helper (Streak Logic) ---
+// --- Hàm Helper (Streak Logic - Giữ nguyên) ---
 const getPreviousDayKey = (dateKey) => {
     const previous = new Date(dateKey);
     previous.setDate(previous.getDate() - 1);
@@ -16,12 +17,9 @@ const calculateStreak = (completionHistory, todayKey) => {
     let longestStreak = 0;
     let totalCompletedDays = 0;
     
-    // 1. Tính Current Streak
     let consecutiveDays = 0;
     let checkDate = new Date(todayKey);
     
-    // Nếu hôm nay không hoàn thành, streak chỉ có thể là 0, 
-    // nhưng ta vẫn check ngày hôm qua để xem streak có bị đứt không.
     if (!completionHistory[todayKey]) {
         checkDate = new Date(getPreviousDayKey(todayKey));
     }
@@ -29,20 +27,18 @@ const calculateStreak = (completionHistory, todayKey) => {
     let isTodayCheck = true;
     while (true) {
         const dateKey = checkDate.toISOString().split('T')[0];
+        const historyDates = Object.keys(completionHistory).sort();
         
-        // Dừng nếu chưa đến ngày bắt đầu tracking
-        if (new Date(dateKey) < new Date(Object.keys(completionHistory).sort()[0] || todayKey)) {
+        if (historyDates.length === 0 || new Date(dateKey) < new Date(historyDates[0])) {
             break;
         }
 
         if (completionHistory[dateKey]) {
             consecutiveDays++;
         } else if (isTodayCheck && !completionHistory[todayKey]) {
-            // Nếu hôm nay là ngày duy nhất bị miss, streak là 0, thoát
             consecutiveDays = 0;
             break;
         } else {
-            // Dừng nếu chuỗi bị đứt (ngày hôm trước đó không hoàn thành)
             break;
         }
         
@@ -51,7 +47,6 @@ const calculateStreak = (completionHistory, todayKey) => {
     }
     currentStreak = consecutiveDays;
 
-    // 2. Tính Longest Streak và Total Completed Days
     let completedDays = Object.keys(completionHistory).filter(day => completionHistory[day]).sort();
     totalCompletedDays = completedDays.length;
 
@@ -61,53 +56,31 @@ const calculateStreak = (completionHistory, todayKey) => {
     if (completedDays.length > 0) {
         tempStreak = 1;
         maxStreak = 1;
-
         for (let i = 1; i < completedDays.length; i++) {
             const currentDay = new Date(completedDays[i]);
             const previousDay = new Date(completedDays[i-1]);
-            
-            // Tính toán khoảng cách ngày
             const oneDay = 24 * 60 * 60 * 1000;
             if (currentDay.getTime() - previousDay.getTime() === oneDay) {
                 tempStreak++;
             } else {
                 tempStreak = 1;
             }
-            if (tempStreak > maxStreak) {
-                maxStreak = tempStreak;
-            }
+            if (tempStreak > maxStreak) maxStreak = tempStreak;
         }
     }
-    
-    // Đảm bảo longestStreak lớn hơn hoặc bằng currentStreak
     longestStreak = Math.max(maxStreak, currentStreak);
 
     return { currentStreak, longestStreak, totalCompletedDays };
 }
 
-// Dữ liệu thói quen giả
+// Dữ liệu giả (SỬA: Dùng Emoji thay vì tên icon)
 const MOCK_HABITS = [
     {
-        id: '1', title: 'Uống đủ nước', icon: 'droplet', description: 'Uống 8 ly nước mỗi ngày',
+        id: '1', title: 'Uống đủ nước', icon: '💧', description: 'Uống 8 ly nước',
         targetFrequency: 'daily', startDate: '2025-11-01',
         colorTheme: '#4A90E2', 
         currentStreak: 0, longestStreak: 0, totalCompletedDays: 0,
-        completionHistory: {
-            '2025-11-17': true, 
-            '2025-11-18': true, 
-            '2025-11-19': true, 
-        }
-    },
-    {
-        id: '2', title: 'Đọc sách', icon: 'book', description: 'Đọc 30 phút trước khi ngủ',
-        targetFrequency: 'daily', startDate: '2025-10-15',
-        colorTheme: '#50E3C2', 
-        currentStreak: 0, longestStreak: 0, totalCompletedDays: 0,
-        completionHistory: {
-            '2025-11-15': true,
-            '2025-11-16': true,
-            '2025-11-18': true,
-        }
+        completionHistory: { '2025-11-17': true, '2025-11-18': true, '2025-11-19': true }
     },
 ];
 
@@ -116,9 +89,15 @@ const HabitContext = createContext();
 export const HabitProvider = ({ children }) => { 
     const [habits, setHabits] = useState(MOCK_HABITS); 
 
+    // Xin quyền thông báo khi App khởi động
+    useEffect(() => {
+        registerForPushNotificationsAsync();
+    }, []);
+
     const addHabit = (newHabitData) => {
+        const id = uuidv4(); // Tạo ID
         const newHabit = {
-            id: uuidv4(), 
+            id, 
             ...newHabitData,
             currentStreak: 0,
             longestStreak: 0,
@@ -127,6 +106,7 @@ export const HabitProvider = ({ children }) => {
             startDate: new Date(newHabitData.startDate || new Date()).toISOString().split('T')[0], 
         };
         setHabits(prevHabits => [...prevHabits, newHabit]);
+        return id;
     };
 
     const updateHabit = (id, updatedData) => {
@@ -151,13 +131,9 @@ export const HabitProvider = ({ children }) => {
                     const isCompleted = habit.completionHistory[dateKey];
                     const newCompletionHistory = { ...habit.completionHistory };
 
-                    if (isCompleted) {
-                        delete newCompletionHistory[dateKey]; 
-                    } else {
-                        newCompletionHistory[dateKey] = true; 
-                    }
+                    if (isCompleted) delete newCompletionHistory[dateKey]; 
+                    else newCompletionHistory[dateKey] = true; 
 
-                    // Tính toán lại Streaks (FR-6)
                     const { currentStreak, longestStreak, totalCompletedDays } = calculateStreak(newCompletionHistory, todayKey);
                     
                     return {
@@ -174,12 +150,10 @@ export const HabitProvider = ({ children }) => {
     };
 
     return (
-        <HabitContext.Provider value={{ habits, addHabit, updateHabit, deleteHabit, toggleCompletion, calculateStreak }}>
+        <HabitContext.Provider value={{ habits, addHabit, updateHabit, deleteHabit, toggleCompletion }}>
             {children}
         </HabitContext.Provider>
     );
 };
 
-export const useHabits = () => {
-    return useContext(HabitContext);
-};
+export const useHabits = () => useContext(HabitContext);
